@@ -1,54 +1,87 @@
-#include <opencv2/videoio.hpp>
-#include <opencv2/imgproc.hpp>
-#include <opencv2/highgui.hpp>
-
 #include <iostream>
+#include <opencv2/videoio.hpp>
+#include <opencv2/highgui/highgui.hpp>
 
-using namespace cv;
+#include <chrono>
 
-void myBlur(int event, int x, int y, int flags, void* params)
+#include <region_blur.h>
+
+void onMouse(int event, int x, int y, int flags, void* params)
 {
-  cv::Size reg(100, 100);
-  if (event == cv::EVENT_MOUSEMOVE)
-  {
-    Mat& temp = *(Mat*)params;
-    
-    if (cv::Rect(cv::Point(reg.width/2, reg.height/2), cv::Size(temp.cols - reg.width/2, temp.rows - reg.height/2)).contains(cv::Point(x, y)))
-    {
-      cv::Rect region(Point(x - reg.width/2, y - reg.height / 2), cv::Point(x + reg.width / 2, y + reg.height/2));
-
-      cv::GaussianBlur(temp(region), temp(region), cv::Size(51, 51), 0, 0);
-      //temp(region).setTo(0);
-      cv::rectangle(temp, region, cv::Scalar(100, 200, 100), 1);
-    }
-  }
+  RegionBlur& blur = *(RegionBlur*)params;
+  blur.setMousePose(x, y);
 }
 
 
 int main()
 {
-  //auto video = cv::VideoCapture("test.avi");
-  auto video = cv::VideoCapture("C:/Users/nosmokingsurfer/source/repos/skytrack/IMG_3676.MOV");
+  //opening config file. YAML file - cv:::FileStorage to read/write.
+  cv::FileStorage fs("../config.ini", cv::FileStorage::READ);
+
+  cv::VideoCapture video;
+  RegionBlur region_blur;
+
+  if (fs.isOpened())
+  {
+    if ((!fs["input_file"].empty()) && (fs["input_file"].isString()))
+    {
+      std::cout << "Trying to open video: " << fs["input_file"].string() << std::endl;
+      video = cv::VideoCapture(fs["input_file"].string());
+      if (!video.isOpened())
+      {
+        std::cout << "Unable to open video" << std::endl;
+        return -1;
+      }
+    }
+  }
+  else
+  {
+    std::cout << "Unable to open config file" << std::endl;
+    return -1; //config file is not opened
+  }
+  
+  if (!region_blur.init(fs.root()))
+  {
+    std::cout << "Unable to initialize RegionBlur instance" << std::endl;
+    return -1;
+  }
+
+  fs.release();
+
+  //processing video
   if (video.isOpened())
   {
 
-    cv::Mat tmp;
-    cv::namedWindow("blur_app");
+    //auto t_start = std::chrono::system_clock::now();
     
-    cv::setMouseCallback("blur_app", myBlur, &tmp);
-    
+    region_blur.setImageSize((int)video.get(cv::CAP_PROP_FRAME_WIDTH), (int)video.get(cv::CAP_PROP_FRAME_HEIGHT));
+
+    cv::namedWindow("blur_app", cv::WINDOW_FREERATIO);
+
+    cv::setMouseCallback("blur_app", onMouse, &region_blur);
+
+    cv::Mat img;
+
     while (video.grab())
     {
-      video.retrieve(tmp);
+      video.retrieve(img);
       
-      //cv::GaussianBlur(tmp, tmp, cv::Size(51, 51),0,0);
-      
-      int key = cv::waitKey(20);
+      region_blur.process(img);
+
+      int key = cv::waitKey(3);
       if (key == 27)
         return 1;
 
-      cv::imshow("blur_app", tmp);
+      cv::imshow("blur_app", img);
     }
+
+    //auto t_finish = std::chrono::system_clock::now();
+    //std::cout << "Duration = " << std::chrono::duration_cast<std::chrono::milliseconds>(t_finish - t_start).count() << " milliseconds" << std::endl;
   }
+  else
+  {
+    std::cout << "Video is not opened" << std::endl;
+  }
+
   return 1;
 }
