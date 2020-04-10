@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.0)
 
+set(CMAKE_CXX_STANDARD 11)
+
 project(blur_app)
 find_package(OpenCV 4.2 REQUIRED)
 find_package(Boost 1.68 COMPONENTS program_options)
