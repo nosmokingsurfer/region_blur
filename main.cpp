@@ -3,85 +3,84 @@
 #include <opencv2/highgui/highgui.hpp>
 
 #include <chrono>
-
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/ini_parser.hpp>
 #include <region_blur.h>
+
+
 
 void onMouse(int event, int x, int y, int flags, void* params)
 {
-  RegionBlur& blur = *(RegionBlur*)params;
-  blur.setMousePose(x, y);
+  //if mouse moves - update mouse cursor position
+  if (event == cv::EVENT_MOUSEMOVE)
+  {
+    RegionBlur& blur = *(RegionBlur*)params;
+    blur.setMousePose(x, y);
+  }
 }
-
 
 int main()
 {
-  //opening config file. YAML file - cv:::FileStorage to read/write.
-  cv::FileStorage fs("../config.ini", cv::FileStorage::READ);
+  //reading config.ini file
+  boost::property_tree::ptree pt;
+  boost::property_tree::ini_parser::read_ini("../config.ini", pt);
 
+  //opening video file
   cv::VideoCapture video;
-  RegionBlur region_blur;
-
-  if (fs.isOpened())
+  RegionBlurParams blur_params;
+  if (!pt.empty())
   {
-    if ((!fs["input_file"].empty()) && (fs["input_file"].isString()))
+    std::string video_file = pt.get<std::string>("input.input_file");
+    if (!video_file.empty())
     {
-      std::cout << "Trying to open video: " << fs["input_file"].string() << std::endl;
-      video = cv::VideoCapture(fs["input_file"].string());
+      
+      std::cout << "Trying to open video: " << video_file << std::endl;
+      video = cv::VideoCapture(video_file);
       if (!video.isOpened())
       {
-        std::cout << "Unable to open video" << std::endl;
+        std::cerr << "Unable to open video" << std::endl;
         return -1;
       }
     }
+
+    blur_params.kernel_w = pt.get<int>("region_blur.kernel_w");
+    blur_params.kernel_h = pt.get<int>("region_blur.kernel_h");
+    blur_params.region_w = pt.get<int>("region_blur.region_w");
+    blur_params.region_h = pt.get<int>("region_blur.region_h");
+    blur_params.sigma_x = pt.get<double>("region_blur.sigma_x");
+    blur_params.sigma_y = pt.get<double>("region_blur.sigma_y");
   }
   else
   {
-    std::cout << "Unable to open config file" << std::endl;
-    return -1; //config file is not opened
+    std::cerr << "Properties are empty" << std::endl;
+    return -1; //config file was not opened
   }
   
-  if (!region_blur.init(fs.root()))
-  {
-    std::cout << "Unable to initialize RegionBlur instance" << std::endl;
-    return -1;
-  }
+  //initializing RegionBlur instance
+  RegionBlur region_blur(blur_params);
+ 
+  region_blur.setImageSize((int)video.get(cv::CAP_PROP_FRAME_WIDTH), (int)video.get(cv::CAP_PROP_FRAME_HEIGHT));
 
-  fs.release();
+  cv::namedWindow("blur_app", cv::WINDOW_FREERATIO);
 
+  cv::setMouseCallback("blur_app", onMouse, &region_blur);
+
+  cv::Mat img;
   //processing video
-  if (video.isOpened())
+  while (video.grab())
   {
-
-    //auto t_start = std::chrono::system_clock::now();
-    
-    region_blur.setImageSize((int)video.get(cv::CAP_PROP_FRAME_WIDTH), (int)video.get(cv::CAP_PROP_FRAME_HEIGHT));
-
-    cv::namedWindow("blur_app", cv::WINDOW_FREERATIO);
-
-    cv::setMouseCallback("blur_app", onMouse, &region_blur);
-
-    cv::Mat img;
-
-    while (video.grab())
-    {
-      video.retrieve(img);
+    video.retrieve(img);
       
-      region_blur.process(img);
+    region_blur.process(img);
 
-      int key = cv::waitKey(3);
-      if (key == 27)
-        return 1;
+    int key = cv::waitKey(3);
 
-      cv::imshow("blur_app", img);
-    }
+    //press ESC button to exit
+    if (key == 27)
+      return 1;
 
-    //auto t_finish = std::chrono::system_clock::now();
-    //std::cout << "Duration = " << std::chrono::duration_cast<std::chrono::milliseconds>(t_finish - t_start).count() << " milliseconds" << std::endl;
+    cv::imshow("blur_app", img);
   }
-  else
-  {
-    std::cout << "Video is not opened" << std::endl;
-  }
-
-  return 1;
+  
+  return 0;
 }
