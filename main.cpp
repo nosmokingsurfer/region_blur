@@ -41,14 +41,20 @@ int main()
         std::cerr << "Unable to open video" << std::endl;
         return -1;
       }
+      std::cout << "Video openned." << std::endl;
     }
-
+    
+    blur_params.video_w = (int)video.get(cv::CAP_PROP_FRAME_WIDTH);
+    blur_params.video_h = (int)video.get(cv::CAP_PROP_FRAME_HEIGHT);
+    
     blur_params.kernel_w = pt.get<int>("region_blur.kernel_w");
     blur_params.kernel_h = pt.get<int>("region_blur.kernel_h");
     blur_params.region_w = pt.get<int>("region_blur.region_w");
     blur_params.region_h = pt.get<int>("region_blur.region_h");
-    blur_params.sigma_x = pt.get<double>("region_blur.sigma_x");
-    blur_params.sigma_y = pt.get<double>("region_blur.sigma_y");
+    blur_params.anchor_x = pt.get<int>("region_blur.anchor_x");
+    blur_params.anchor_y = pt.get<int>("region_blur.anchor_y");
+    blur_params.borderType = pt.get<int>("region_blur.borderType");
+    
   }
   else
   {
@@ -58,8 +64,6 @@ int main()
   
   //initializing RegionBlur instance
   RegionBlur region_blur(blur_params);
- 
-  region_blur.setImageSize((int)video.get(cv::CAP_PROP_FRAME_WIDTH), (int)video.get(cv::CAP_PROP_FRAME_HEIGHT));
 
   cv::namedWindow("blur_app", cv::WINDOW_FREERATIO);
 
@@ -70,14 +74,12 @@ int main()
   while (video.grab())
   {
     video.retrieve(img);
-      
     region_blur.process(img);
-
-    int key = cv::waitKey(3);
-
+    
     //press ESC button to exit
+    int key = cv::waitKey(3);
     if (key == 27)
-      return 1;
+      return 0;
 
     cv::imshow("blur_app", img);
   }

@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.0)
 
 project(blur_app)
-find_package(OpenCV REQUIRED)
-find_package(Boost COMPONENTS program_options)
+find_package(OpenCV 4.2 REQUIRED)
+find_package(Boost 1.68 COMPONENTS program_options)
 
 include_directories( ${Boost_INCLUDE_DIR} )
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})

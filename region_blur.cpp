@@ -5,45 +5,46 @@
 
 using namespace std;
 
-RegionBlur::RegionBlur(const RegionBlurParams& params)
+bool operator<(const cv::Size& lhs, const cv::Size& rhs)
 {
+  return ((lhs.width < rhs.width) && (lhs.height < rhs.height));
+}
+
+RegionBlur::RegionBlur(const RegionBlurParams& params)
+  : mouse_moved(false)
+{
+  image_size = cv::Size(params.video_w, params.video_h);
+  cout << "Video frame size = " << image_size << endl;
+
   //grabbing parameters
   kernel_size.width = params.kernel_w;
   kernel_size.height = params.kernel_h;
+  cout << "Blur kernel size = " << kernel_size << endl;
+
 
   region_size.width = params.region_w;
   region_size.height = params.region_h;
+  cout << "Blur window size = " << region_size << endl;
 
-  sigma_xy.x = params.sigma_x;
-  sigma_xy.y = params.sigma_y;
+  anchor = cv::Point(params.anchor_x, params.anchor_y);
+  cout << "Anchor point of kernel = " << anchor << endl;
 
-  //initializing kernels for gaussian blur. Will allow to skip calculation on every cycle
-  kernel_x = cv::getGaussianKernel(kernel_size.width, sigma_xy.x);
-  kernel_y = cv::getGaussianKernel(kernel_size.height, sigma_xy.y);
+  bordertype = static_cast<cv::BorderTypes>(params.borderType);
+  cout << "Blur border type = " << bordertype << endl;
 
-  mouse_moved = false;
+  boundary = cv::Rect(0, 0, image_size.width, image_size.height);
 }
 
 void RegionBlur::updateRegion()
 {
-  //check if 
-  if(!boundary.contains(current_mouse_position))
-  {
-    if (current_mouse_position.x < region_size.width / 2)
-      current_mouse_position.x = region_size.width / 2;
-    if (current_mouse_position.x > image_size.width - region_size.width / 2)
-      current_mouse_position.x = image_size.width - region_size.width / 2;
-    if (current_mouse_position.y < region_size.height / 2)
-      current_mouse_position.y = region_size.height / 2;
-    if (current_mouse_position.y > image_size.height - region_size.height / 2)
-      current_mouse_position.y = image_size.height - region_size.height / 2;
-  }
-
   //updating state of region to be blurred
   current_region.x = current_mouse_position.x - region_size.width / 2;
   current_region.y = current_mouse_position.y - region_size.height / 2;
   current_region.width = region_size.width;
   current_region.height = region_size.height;
+
+  //cutting off everything outside the image
+  current_region &= boundary;
 }
 
 void RegionBlur::setMousePose(int x, int y)
@@ -62,31 +63,12 @@ bool RegionBlur::process(cv::Mat& img) const
     cerr << "Image empty or wrong size : " << img.size() << endl;
     return false;
   }
-
-  //auto start_time = std::chrono::system_clock::now();
-
-    //cv::gaussianBlur was faster than sepFilter2D
+    
   if (mouse_moved)
   {
-    cv::GaussianBlur(img(current_region), img(current_region), kernel_size, sigma_xy.x, sigma_xy.y);
-
-    //cv::sepFilter2D(img(current_region), img(current_region), CV_8U, kernel_x, kernel_y);
-
-    //auto finish_time = std::chrono::system_clock::now();
-    //cout << chrono::duration_cast<chrono::milliseconds>(finish_time - start_time).count() << endl;
-
-    //green rectangle for debug and visualization purposes
-    //cv::rectangle(img, current_region, cv::Scalar(100, 200, 100), 2);
+    cv::blur(img(current_region), img(current_region), kernel_size, anchor, bordertype);
   }
 
   return true;
 }
 
-void RegionBlur::setImageSize(int width, int height)
-{
-  this->image_size = cv::Size(width, height);
-
-  this->boundary = cv::Rect(cv::Point(this->region_size.width/2, this->region_size.height/2),
-                            cv::Point(this->image_size.width - this->region_size.width/2,
-                                      this->image_size.height - this->region_size.height/2));
-}
